@@ -24,7 +24,9 @@ sigmoid = function(x) {
 
 elu = function(x) {
   ifelse(x > 0, x, eluAlpha * (exp(x) - 1))
-   
+}
+eluDerivative = function(x) {
+  ifelse(x > 0, 1, eluAlpha * exp(x) )
 }
 
 softmax = function(x) {
@@ -61,12 +63,59 @@ MSECost = function(targetOutput, netOutput) {
 }
 
 CrossEntropyCost = function(targetOutput, netOutput) {
-  error = (1/nrow(targetOutput)) * sum( rowSums(-targetOutput * log(netOutput)) )
+  error = (1/nrow(targetOutput)) * sum( rowSums(-targetOutput * log(netOutput)))
   return(error)
 }
 
-SGD = function(targetOutput, netOutput) {
+SGD = function(inputMat, weightList, biasList, outputList, targetOutput) {
   
+  synapseIndex = length(weightList)
+  hiddenToOutputGrad = weightList[[synapseIndex]]
+  
+  for(trainEx in 1:nrow(outputList$output)) {
+  
+    deltaList = list()
+    
+    hiddenToOutputDelta = weightList[[synapseIndex]]
+    
+    for(i in 1:nrow(hiddenToOutputGrad)) {
+      for(j in 1:ncol(hiddenToOutputGrad)) {
+        delta = (outputList$output[trainEx,j] 
+                - targetOutput[trainEx,j])
+        hiddenToOutputDelta[i,j] = delta;
+        hiddenToOutputGrad[i,j] = delta * outputList$activatedSums[[synapseIndex-1]][1, i]
+      }
+    }
+    
+    deltaList[[synapseIndex]] = hiddenToOutputDelta
+    
+    while(synapseIndex > 1) {
+    
+      synapseIndex = synapseIndex - 1
+      hiddenDelta = weightList[[synapseIndex]]
+      hiddenGrad = weightList[[synapseIndex]]
+    
+      for(i in 1:nrow(hiddenGrad)) {
+        for(j in 1:ncol(hiddenGrad)) {
+          delta = eluDerivative(outputList$activatedSums[[synapseIndex]][1, j]) * 
+             sum(c(weightList[[synapseIndex+1]][j,]) * c(deltaList[[synapseIndex+1]][j,]))
+          hiddenDelta[i,j] = delta
+          if(synapseIndex == 1) {
+            hiddenGrad[i,j] = delta * inputMat[1,i]
+          } else {
+            hiddenGrad[i,j] = delta * outputList$activatedSums[[synapseIndex-1]][1, i]
+          }
+        }
+      }
+      
+      deltaList[[synapseIndex]] = hiddenDelta
+      
+    }
+    
+    synapseIndex = length(weightList)
+    
+  }
+    
 }
 
 input = matrix(data = c(0,0, 1,0, 0,1, 1,1), nrow = 4, ncol = 2, byrow = T)
@@ -75,15 +124,18 @@ trainOutput = matrix(data = c(1,0, 0,1, 0,1, 1,0), nrow = 4, ncol = 2, byrow = T
 numInputSets = 4
 numLayers = 3
 eluAlpha = 1
-topology = c(2,3,3,2)
+topology = c(2,3,2)
 
-weightMats = initWeightMats(topology)
-biasMats = initBiasMats(topology, numInputSets)
+weightList = initWeightMats(topology)
+biasList = initBiasMats(topology, numInputSets)
 
-output = forwardProp(input, weightMats, biasMats)
-output
+print(weightList)
+print(biasList)
 
-CrossEntropyCost(trainOutput, output$output)
+outputList = forwardProp(input, weightList, biasList)
+outputList
+
+SGD(input, weightList, biasList, outputList, trainOutput)
 
 
 
