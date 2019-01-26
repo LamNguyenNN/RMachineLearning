@@ -68,9 +68,10 @@ CrossEntropyCost = function(targetOutput, netOutput) {
 }
 
 SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learningRate, epoch) {
+  origInput_mat = inputMat
   synapseIndex = length(weightList)
-  
-  while (epoch > 0) {
+  epochNum = 0
+  while (epochNum < epoch) {
     for(trainEx in 1:nrow(targetOutput)) {
       outputList = forwardProp(inputMat, weightList, biasList)
       deltaWeightList = list()
@@ -142,25 +143,28 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
       
     }
     
-    newOutput = forwardProp(inputMat, weightList, biasList)
-    print(newOutput$output)
-    epoch = epoch - 1
+   # newOutput = forwardProp(inputMat, weightList, biasList)
+    #print(round(newOutput$output), digits = 3)
+   
+    epochNum = epochNum + 1
+    print(epochNum) 
+    randomSwap = sample(1:nrow(inputMat), nrow(inputMat), replace = F)
     
-    #randomSwap = sample(1:nrow(inputMat), nrow(inputMat), replace = F)
-    
-    #inputMat = inputMat[randomSwap,]
-    #targetOutput = targetOutput[randomSwap,]
+    inputMat = inputMat[randomSwap,]
+    targetOutput = targetOutput[randomSwap,]
   }
   
   newBiasList = list()
   for(i in 1:length(biasList)) {
     newBiasList[[i]] = biasList[[i]][1,]
   }
-  
+  print(forwardProp(origInput_mat, weightList, biasList)$output)
   return (list("weights" = weightList, "biases" = newBiasList))
   
 }
 
+
+if(F) {
 input = matrix(data = c(0,0, 1,0, 0,1, 1,1), nrow = 4, ncol = 2, byrow = T)
 trainOutput = matrix(data = c(1,0, 0,1, 0,1, 1,0), nrow = 4, ncol = 2, byrow = T)
 
@@ -178,12 +182,11 @@ outputList = forwardProp(input, weightList, biasList)
 parameters = SGD(input, weightList, biasList, outputList, trainOutput, learningRate, epoch)
 
 print(forwardProp(matrix(c(0,1), nrow=1, ncol=2, byrow =T), parameters$weights, parameters$biases)$output)
-
+}
 
 iris_mat = as.matrix(as.data.frame(lapply(iris, as.numeric)))
-trainInput_mat = iris_mat[c(1:40, 51:90, 101:140), 1:4]
+trainInput_mat = apply(iris_mat[c(1:40, 51:90, 101:140), 1:4], 2, function(x) (x - mean(x))/(sd(x)))
 validationInput_mat = iris_mat[c(41:50, 91:100, 141:150), 1:4]
-trainInput_mat
 trainOutput_vec = iris_mat[c(1:40, 51:90, 101:140),5]
 validationOutput_vec = matrix(iris_mat[c(41:50, 91:100, 141:150), 5])
 
@@ -204,12 +207,13 @@ numLayers = 3
 eluAlpha = .7
 learningRate = .25
 epoch = 10
-topology = c(4,8,3)
+topology = c(4,4,3)
 
 weightList = initWeightMats(topology)
 biasList = initBiasMats(topology, numTrainingExamples)
 outputList = forwardProp(trainInput_mat, weightList, biasList)
-outputList$output
 
 parameters = SGD(trainInput_mat, weightList, biasList, outputList, trainOutput_mat, learningRate, epoch)
+
+#print(round(forwardProp(validationOutput_mat, parameters$weights, parameters$biases)))
 
