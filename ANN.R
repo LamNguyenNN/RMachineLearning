@@ -43,11 +43,11 @@ forwardProp = function(inputMat, weightMats, biasMats) {
   
   activatedSums = list()
   
-  activatedSums[[1]] = tanh((inputMat %*% weightMats[[1]]) + biasMats[[1]])
+  activatedSums[[1]] = elu((inputMat %*% weightMats[[1]]) + biasMats[[1]])
   
   i = 2
   while(i < numSynapses) {
-    activatedSums[[i]] = tanh((activatedSums[[i-1]] %*% weightMats[[i]]) + biasMats[[i]])
+    activatedSums[[i]] = elu((activatedSums[[i-1]] %*% weightMats[[i]]) + biasMats[[i]])
     i = i + 1
   }
   
@@ -139,7 +139,7 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
                                               ncol=ncol(biasList[[synapseIndex]]), byrow = T)
         for(i in 1:nrow(gradWeightList[[synapseIndex]])) {
           for(j in 1:ncol(gradWeightList[[synapseIndex]])) {
-            delta = tanhDerivative(outputList$activatedSums[[synapseIndex]][trainEx, j]) * 
+            delta = eluDerivative(outputList$activatedSums[[synapseIndex]][trainEx, j]) * 
               sum(c(weightList[[synapseIndex+1]][j,]) * c(deltaWeightList[[synapseIndex+1]][j,]))
             deltaWeightList[[synapseIndex]][i,j] = delta
             
@@ -154,7 +154,7 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
         
         for(i in 1:nrow(gradBiasList[[synapseIndex]])) {
           for(j in 1:ncol(gradBiasList[[synapseIndex]])) {
-            delta = tanhDerivative(outputList$activatedSums[[synapseIndex]][trainEx, j]) * 
+            delta = eluDerivative(outputList$activatedSums[[synapseIndex]][trainEx, j]) * 
               sum(c(weightList[[synapseIndex+1]][j,]) * c(deltaWeightList[[synapseIndex+1]][j,]))
             gradBiasList[[synapseIndex]][i, j] = delta
           }
@@ -171,8 +171,8 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
       }
       
     }
-   
-    print(epochNum) 
+    
+    print(epochNum)
     
     if(epochNum%%10==0 || T)  {
       newOutput = forwardProp(origInput_mat, weightList, biasList)
@@ -192,6 +192,7 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
     targetOutput = targetOutput[randomSwap,]
   }
   
+  print("yes")
   newOutput = forwardProp(origInput_mat, weightList, biasList)
   print(round(newOutput$output), digits = 3)
   
@@ -211,66 +212,58 @@ test = function (input_mat, weightList, biasList) {
   return (forwardProp(input_mat, weightList, biasList))
 }
 
-if(F) {
-input = matrix(data = c(0,0, 1,0, 0,1, 1,1), nrow = 4, ncol = 2, byrow = T)
-trainOutput = matrix(data = c(1,0, 0,1, 0,1, 1,0), nrow = 4, ncol = 2, byrow = T)
 
-numInputSets = 4
-numLayers = 3
-eluAlpha = .7
-learningRate = .005
-epoch = 1000
-topology = c(2,8,8,2)
+index = sample(1:nrow(iris), round(.75*nrow(iris)))
+mean_train = apply(iris[index, 1:4], 2, mean)
+sd_train = apply(iris[index, 1:4], 2, sd)
 
-weightList = initWeightMats(topology)
-biasList = initBiasMats(topology, numInputSets)
-outputList = forwardProp(input, weightList, biasList)
+data_train = iris[index,]
+input_train = scale(data_train[, 1:4], center = mean_train, scale = sd_train)
+output_train = matrix(nrow = nrow(input_train), ncol = 3)
 
-parameters = SGD(input, weightList, biasList, outputList, trainOutput, learningRate, epoch)
-
-print(forwardProp(matrix(c(0,1), nrow=1, ncol=2, byrow =T), parameters$weights, parameters$biases)$output)
-}
-
-iris_mat = as.matrix(as.data.frame(lapply(iris, as.numeric)))
-#trainInput_mat = apply(iris_mat[c(1:40, 51:90, 101:140), 1:4], 2, function(x) (x - mean(x))/(sd(x))) #, 51:90, 101:140)
-#sampleMean = apply(iris_mat[c(1:40, 51:90, 101:140), 1:4], 2, function(x) (mean(x)))
-#sampleSD = apply(iris_mat[c(1:40, 51:90, 101:140), 1:4], 2, function(x) (sd(x)))
-#validationInput_mat = t(apply(iris_mat[c(41:50, 91:100, 141:150), 1:4], 1, function(x) (x-sampleMean)/(sampleSD)))
-trainInput_mat = apply(iris_mat[c(1:40, 51:90, 101:140), 1:4], 2, function(x) ( x / sqrt(sum(x^2)) ))
-trainNorm = apply(iris_mat[c(1:40, 51:90, 101:140), 1:4], 2, function(x) ( sqrt(sum(x^2)) ))
-validationInput_mat = (apply(iris_mat[c(41:50, 91:100, 141:150), 1:4], 1, function(x) (x/trainNorm)))
-trainOutput_vec = iris_mat[c(1:40, 51:90, 101:140),5]
-validationOutput_vec = matrix(iris_mat[c(41:50, 91:100, 141:150), 5])
-
-trainOutput_mat = matrix(nrow = length(trainOutput_vec), ncol = 3)
-
-for(i in 1:length(trainOutput_vec)) {
-  if(trainOutput_vec[i] == 1) {
-    trainOutput_mat[i,] = c(1,0,0) 
-  } else if (trainOutput_vec[i] == 2) {
-    trainOutput_mat[i,] = c(0,1,0) 
+for(i in 1:nrow(data_train)) {
+  if(as.numeric(data_train[i,5]) == 1) {
+    output_train[i,] = c(1,0,0) 
+  } else if (as.numeric(data_train[i,5]) == 2) {
+    output_train[i,] = c(0,1,0) 
   } else {
-    trainOutput_mat[i,] = c(0,0,1) 
+    output_train[i,] = c(0,0,1) 
+  }
+}
+output_train
+
+data_test = iris[-index,]
+input_test = scale(data_test[, 1:4], center = mean_train, scale = sd_train)
+output_test = matrix(nrow = length(input_test), ncol = 3)
+for(i in 1:nrow(data_test)) {
+  if(as.numeric(data_test[i,5]) == 1) {
+    output_test[i,] = c(1,0,0) 
+  } else if (as.numeric(data_test[i,5]) == 2) {
+    output_test[i,] = c(0,1,0) 
+  } else {
+    output_test[i,] = c(0,0,1) 
   }
 }
 
-numTrainingExamples = nrow(trainInput_mat)
+numTrainingExamples = nrow(input_train)
+numTrainingExamples
 numLayers = 3
-eluAlpha = .7
-learningRate = .005
+#eluAlpha = .7
+learningRate = .05
 epoch = 100
-topology = c(4,6,6,3)
+topology = c(4,8,3)
 
 weightList = initWeightMats(topology)
 biasList = initBiasMats(topology, numTrainingExamples)
-outputList = forwardProp(trainInput_mat, weightList, biasList)
+outputList = forwardProp(input_train, weightList, biasList)
 
-parameters = SGD(trainInput_mat, weightList, biasList, outputList, trainOutput_mat, learningRate, epoch)
+parameters = SGD(input_train, weightList, biasList, outputList, output_train, learningRate, epoch)
+
 
 #validationInput_mat
 #validationOutput_vec
 
-round(test(validationInput_mat, parameters$weights, parameters$biases)$output)
+#round(test(validationInput_mat, parameters$weights, parameters$biases)$output)
 
 #print(round(forwardProp(validationOutput_mat, parameters$weights, parameters$biases)))
 
