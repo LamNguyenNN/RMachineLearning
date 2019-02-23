@@ -78,18 +78,20 @@ calcAccuracy = function(output, trainOutput) {
   for(i in 1:length(output)) {
     if (output[i] == trainOutput[i]) {
       numCorrect = numCorrect + 1
-      
     }
   }
   accuracy = numCorrect / length(trainOutput)
   return (accuracy)
 }
 
-SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learningRate, epoch) {
+SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learningRate, epoch, input_test, output_test) {
   origInput_mat = inputMat
   origOutput_mat = targetOutput
   synapseIndex = length(weightList)
   epochNum = 1
+  counter = 0
+  prevCost = 0
+  currCost = 0
   #while (epochNum <= epoch) {
   while(T) {
     for(trainEx in 1:nrow(targetOutput)) {
@@ -105,36 +107,53 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
       gradWeightList = list()
       gradBiasList = list() #Gradient is same as delta for bias
       
-      deltaWeightList[[synapseIndex]] = weightList[[synapseIndex]]
+      deltaWeightList[[synapseIndex]] = matrix(nrow=nrow(weightList[[synapseIndex]]),
+                                               ncol=ncol(weightList[[synapseIndex]]), byrow = T)
       gradWeightList[[synapseIndex]] = matrix(nrow=nrow(weightList[[synapseIndex]]),
-                                              ncol=ncol(weightList[[synapseIndex]]), byrow = T)
+                                            ncol=ncol(weightList[[synapseIndex]]), byrow = T)
       gradBiasList[[synapseIndex]] = matrix(nrow=nrow(biasList[[synapseIndex]]), 
                                             ncol=ncol(biasList[[synapseIndex]]), byrow = T)
      
       
       #Hidden to Output gradient calculation
-      for(i in 1:nrow( gradWeightList[[synapseIndex]])) {
-        for(j in 1:ncol( gradWeightList[[synapseIndex]])) {
-          delta = ( outputList$output[trainEx,j]
-                   - targetOutput[trainEx,j])
-          deltaWeightList[[synapseIndex]][i,j] = delta;
-          gradWeightList[[synapseIndex]][i,j] = delta * outputList$activatedSums[[synapseIndex-1]][trainEx, i]
+      #for(i in 1:nrow( gradWeightList[[synapseIndex]])) {
+      #  for(j in 1:ncol( gradWeightList[[synapseIndex]])) {
+      #    delta = ( outputList$output[trainEx,j]
+      #             - targetOutput[trainEx,j])
+      #    deltaWeightList[[synapseIndex]][i,j] = delta;
+      #    gradWeightList[[synapseIndex]][i,j] = delta * outputList$activatedSums[[synapseIndex-1]][trainEx, i]
           
-        }
-      }
+      # }
+      #}
       
-      for(i in 1:nrow( gradBiasList[[synapseIndex]])) {
-        for(j in 1:ncol( gradBiasList[[synapseIndex]])) {
-          delta = (outputList$output[trainEx,j] 
-                   - targetOutput[trainEx,j])
-          gradBiasList[[synapseIndex]][i, j] = delta;
-        }
+      delta = outputList$output[trainEx,] - targetOutput[trainEx,]
+      
+      deltaWeightList[[synapseIndex]] = matrix(delta, 
+                                               nrow=nrow(weightList[[synapseIndex]]), 
+                                               ncol=ncol(weightList[[synapseIndex]]), byrow = T)
+      
+      for(i in 1:ncol(outputList$activatedSums[[synapseIndex-1]])) {
+        gradWeightList[[synapseIndex]][i,] = deltaWeightList[[synapseIndex]][i, ] * outputList$activatedSums[[synapseIndex-1]][trainEx, i]
       }
+    
+      gradBiasList[[synapseIndex]] = matrix(delta, 
+                                            nrow=nrow(biasList[[synapseIndex]]), 
+                                            ncol=ncol(biasList[[synapseIndex]]), byrow = T)
+      
+      #for(i in 1:nrow( gradBiasList[[synapseIndex]])) {
+      #  for(j in 1:ncol( gradBiasList[[synapseIndex]])) {
+      #    delta = (outputList$output[trainEx,j] 
+      #             - targetOutput[trainEx,j])
+      #    gradBiasList[[synapseIndex]][i, j] = delta;
+      #  }
+      #}
       
       while(synapseIndex > 1) {
         synapseIndex = synapseIndex - 1
-        deltaWeightList[[synapseIndex]] = weightList[[synapseIndex]]
-        gradWeightList[[synapseIndex]] = weightList[[synapseIndex]]
+        deltaWeightList[[synapseIndex]] = matrix(nrow=nrow(weightList[[synapseIndex]]),
+                                                 ncol=ncol(weightList[[synapseIndex]]), byrow = T)
+        gradWeightList[[synapseIndex]] = matrix(nrow=nrow(weightList[[synapseIndex]]),
+                                                ncol=ncol(weightList[[synapseIndex]]), byrow = T)
         gradBiasList[[synapseIndex]] = matrix(nrow=nrow(biasList[[synapseIndex]]), 
                                               ncol=ncol(biasList[[synapseIndex]]), byrow = T)
         for(i in 1:nrow(gradWeightList[[synapseIndex]])) {
@@ -173,15 +192,24 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
     }
     
     print(epochNum)
-    
+  
     if(epochNum%%10==0 || T)  {
       newOutput = forwardProp(origInput_mat, weightList, biasList)
       #print(round(newOutput$output))
+      newBiasList = list()
+      for(i in 1:length(biasList)) {
+        newBiasList[[i]] = biasList[[i]][1,]
+      }
       accuracy = calcAccuracy (round(newOutput$output), origOutput_mat)
-      loss = MSECost(origOutput_mat, newOutput$output)
-      cat(epochNum, " ", as.numeric(accuracy), " ", loss)
-      if(accuracy > .99) {
+      accuracy_test = test(input_test, output_test, weightList, newBiasList)
+      plot(epochNum, accuracy, type="b")
+      plot(epochNum, accuracy_test, type="b")
+      currCost = CrossEntropyCost(origOutput_mat, newOutput$output)
+      cat(epochNum, " ", "train: ", as.numeric(accuracy), ", test:  ", as.numeric(accuracy_test), " ", currCost)
+      if(abs(currCost - prevCost) < .0001 && F) {
         break
+      } else {
+        prevCost = currCost
       }
     }
     
@@ -205,11 +233,12 @@ SGD = function(inputMat, weightList, biasList, outputList, targetOutput, learnin
   
 }
 
-test = function (input_mat, weightList, biasList) {
+test = function (input_mat, output_mat, weightList, biasList) {
   for(i in 1:length(biasList)) {
     biasList[[i]] = matrix(rep(biasList[[i]], nrow(input_mat)), ncol = length(biasList[[i]]), byrow = T)
   }
-  return (forwardProp(input_mat, weightList, biasList))
+  output = forwardProp(input_mat, weightList, biasList)
+  return(calcAccuracy(round(output$output), output_mat))
 }
 
 
@@ -230,11 +259,10 @@ for(i in 1:nrow(data_train)) {
     output_train[i,] = c(0,0,1) 
   }
 }
-output_train
 
 data_test = iris[-index,]
 input_test = scale(data_test[, 1:4], center = mean_train, scale = sd_train)
-output_test = matrix(nrow = length(input_test), ncol = 3)
+output_test = matrix(nrow = nrow(input_test), ncol = 3)
 for(i in 1:nrow(data_test)) {
   if(as.numeric(data_test[i,5]) == 1) {
     output_test[i,] = c(1,0,0) 
@@ -244,12 +272,13 @@ for(i in 1:nrow(data_test)) {
     output_test[i,] = c(0,0,1) 
   }
 }
-
+input_test
+output_test
+data_test
 numTrainingExamples = nrow(input_train)
-numTrainingExamples
 numLayers = 3
 #eluAlpha = .7
-learningRate = .05
+learningRate = .01
 epoch = 100
 topology = c(4,8,3)
 
@@ -257,13 +286,16 @@ weightList = initWeightMats(topology)
 biasList = initBiasMats(topology, numTrainingExamples)
 outputList = forwardProp(input_train, weightList, biasList)
 
-parameters = SGD(input_train, weightList, biasList, outputList, output_train, learningRate, epoch)
+parameters = SGD(input_train, weightList, biasList, outputList, output_train, learningRate, epoch, input_test, output_test)
 
+test(input_test, output_test, parameters$weights, parameters$biases)
 
-#validationInput_mat
-#validationOutput_vec
-
-#round(test(validationInput_mat, parameters$weights, parameters$biases)$output)
-
-#print(round(forwardProp(validationOutput_mat, parameters$weights, parameters$biases)))
+n=50
+df=data.frame(time=1:n,y=runif(n))
+window=100
+for(i in 1:(n-window)) {
+  flush.console()
+  plot(df$time,df$y,type='l',xlim=c(i,i+window))
+  Sys.sleep(.09)
+}
 
